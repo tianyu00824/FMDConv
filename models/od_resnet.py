@@ -2,16 +2,16 @@ import torch
 import torch.nn as nn
 from modules.fmdconv import FMDConv2d
 
-__all__ = ['OD_ResNet', 'od_resnet18', 'od_resnet34', 'od_resnet50', 'od_resnet101']
+__all__ = ['FMD_ResNet', 'fmd_resnet18', 'fmd_resnet34', 'fmd_resnet50', 'fmd_resnet101']
 
 
-def odconv3x3(in_planes, out_planes, stride=1, reduction=0.0625, kernel_num=1):
-    return ODConv2d(in_planes, out_planes, kernel_size=3, stride=stride, padding=1,
+def fmdconv3x3(in_planes, out_planes, stride=1, reduction=0.0625, kernel_num=1):
+    return FMDConv2d(in_planes, out_planes, kernel_size=3, stride=stride, padding=1,
                     reduction=reduction, kernel_num=kernel_num)
 
 
-def odconv1x1(in_planes, out_planes, stride=1, reduction=0.0625, kernel_num=1):
-    return ODConv2d(in_planes, out_planes, kernel_size=1, stride=stride, padding=0,
+def fmdconv1x1(in_planes, out_planes, stride=1, reduction=0.0625, kernel_num=1):
+    return FMDConv2d(in_planes, out_planes, kernel_size=1, stride=stride, padding=0,
                     reduction=reduction, kernel_num=kernel_num)
 
 
@@ -20,10 +20,10 @@ class BasicBlock(nn.Module):
 
     def __init__(self, inplanes, planes, stride=1, downsample=None, reduction=0.0625, kernel_num=1):
         super(BasicBlock, self).__init__()
-        self.conv1 = odconv3x3(inplanes, planes, stride, reduction=reduction, kernel_num=kernel_num)
+        self.conv1 = fmdconv3x3(inplanes, planes, stride, reduction=reduction, kernel_num=kernel_num)
         self.bn1 = nn.BatchNorm2d(planes)
         self.relu = nn.ReLU(inplace=True)
-        self.conv2 = odconv3x3(planes, planes, reduction=reduction, kernel_num=kernel_num)
+        self.conv2 = fmdconv3x3(planes, planes, reduction=reduction, kernel_num=kernel_num)
         self.bn2 = nn.BatchNorm2d(planes)
         self.downsample = downsample
         self.stride = stride
@@ -56,13 +56,13 @@ class Bottleneck(nn.Module):
     def __init__(self, inplanes, planes, stride=1, downsample=None, reduction=0.0625, kernel_num=1):
         super(Bottleneck, self).__init__()
         #self.conv1 = conv_dy(inplanes, planes, 1, 1, 0)
-        self.conv1 = odconv1x1(inplanes, planes, reduction=reduction, kernel_num=kernel_num)
+        self.conv1 = fmdconv1x1(inplanes, planes, reduction=reduction, kernel_num=kernel_num)
         self.bn1 = nn.BatchNorm2d(planes)
         #self.conv2 = conv_dy(planes, planes, 3, stride, 1)
-        self.conv2 = odconv3x3(planes, planes, stride, reduction=reduction, kernel_num=kernel_num)
+        self.conv2 = fmdconv3x3(planes, planes, stride, reduction=reduction, kernel_num=kernel_num)
         self.bn2 = nn.BatchNorm2d(planes)
         #self.conv3 = conv_dy(planes, planes * 4, 1, 1, 0)
-        self.conv3 = odconv1x1(planes, planes * self.expansion, reduction=reduction, kernel_num=kernel_num)
+        self.conv3 = fmdconv1x1(planes, planes * self.expansion, reduction=reduction, kernel_num=kernel_num)
         self.bn3 = nn.BatchNorm2d(planes * self.expansion)
         self.relu = nn.ReLU(inplace=True)
         self.downsample = downsample
@@ -95,11 +95,11 @@ class Bottleneck(nn.Module):
         return out
 
 
-class OD_ResNet(nn.Module):
+class FMD_ResNet(nn.Module):
     def __init__(self, block, layers, num_classes=1000, dropout=0.1, reduction=0.0625, kernel_num=1):
-        #print("block: "+str(block))  block: <class 'models.od_resnet.BasicBlock'>
+        #print("block: "+str(block))  block: <class 'models.fmd_resnet.BasicBlock'>
         #print("layer0: "+str(layers[0]))
-        super(OD_ResNet, self).__init__()
+        super(FMD_ResNet, self).__init__()
         self.inplanes = 64
         self.conv1 = nn.Conv2d(3, self.inplanes, kernel_size=7, stride=2, padding=3,
                                bias=False)
@@ -168,18 +168,18 @@ class OD_ResNet(nn.Module):
         return self._forward_impl(x)
 
 
-def od_resnet18(**kwargs):
-    model = OD_ResNet(BasicBlock, [2, 2, 2, 2], **kwargs)
+def fmd_resnet18(**kwargs):
+    model = FMD_ResNet(BasicBlock, [2, 2, 2, 2], **kwargs)
     return model
 
-def od_resnet34(**kwargs):
-    model = OD_ResNet(BasicBlock, [3, 4, 6, 3], **kwargs)
+def fmd_resnet34(**kwargs):
+    model = FMD_ResNet(BasicBlock, [3, 4, 6, 3], **kwargs)
     return model
 
-def od_resnet50(**kwargs):
-    model = OD_ResNet(Bottleneck, [3, 4, 6, 3], **kwargs)
+def fmd_resnet50(**kwargs):
+    model = FMD_ResNet(Bottleneck, [3, 4, 6, 3], **kwargs)
     return model
 
-def od_resnet101(**kwargs):
-    model = OD_ResNet(Bottleneck, [3, 4, 23, 3], **kwargs)
+def fmd_resnet101(**kwargs):
+    model = FMD_ResNet(Bottleneck, [3, 4, 23, 3], **kwargs)
     return model
