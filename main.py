@@ -83,7 +83,7 @@ parser.add_argument('-c', '--checkpoint', default='checkpoints', type=str, metav
 parser.add_argument('--resume', default='', type=str, metavar='PATH',
                     help='path to latest checkpoint (default: none)')
 # Architecture
-parser.add_argument('--arch', '-a', metavar='ARCH', default='od_resnet18',
+parser.add_argument('--arch', '-a', metavar='ARCH', default='fmd_resnet18',
                     choices=model_names,
                     help='model architecture: ' +
                         ' | '.join(model_names) +
