@@ -1,7 +1,7 @@
 from torch import nn
 from modules.fmdconv import FMDConv2d
 
-__all__ = ['OD_MobileNetV2', 'od_mobilenetv2_050', 'od_mobilenetv2_075', 'od_mobilenetv2_100']
+__all__ = ['FMD_MobileNetV2', 'fmd_mobilenetv2_050', 'fmd_mobilenetv2_075', 'fmd_mobilenetv2_100']
 
 
 def _make_divisible(v, divisor, min_value=None):
@@ -39,7 +39,7 @@ class ODConvBNReLU(nn.Sequential):
                  reduction=0.0625, kernel_num=1):
         padding = (kernel_size - 1) // 2
         super(ODConvBNReLU, self).__init__(
-            ODConv2d(in_planes, out_planes, kernel_size, stride, padding, groups=groups,
+            FMDConv2d(in_planes, out_planes, kernel_size, stride, padding, groups=groups,
                      reduction=reduction, kernel_num=kernel_num),
             norm_layer(out_planes),
             nn.ReLU6(inplace=True)
@@ -56,14 +56,14 @@ class InvertedResidual(nn.Module):
         layers = []
         if expand_ratio != 1:
             # pw
-            layers.append(ODConvBNReLU(inp, hidden_dim, kernel_size=1, norm_layer=norm_layer,
+            layers.append(FMDConvBNReLU(inp, hidden_dim, kernel_size=1, norm_layer=norm_layer,
                                        reduction=reduction, kernel_num=kernel_num))
         layers.extend([
             # dw
-            ODConvBNReLU(hidden_dim, hidden_dim, stride=stride, groups=hidden_dim, norm_layer=norm_layer,
+            FMDConvBNReLU(hidden_dim, hidden_dim, stride=stride, groups=hidden_dim, norm_layer=norm_layer,
                          reduction=reduction, kernel_num=kernel_num),
             # pw-linear
-            ODConv2d(hidden_dim, oup, 1, 1, 0,
+            FMDConv2d(hidden_dim, oup, 1, 1, 0,
                      reduction=reduction, kernel_num=kernel_num),
             norm_layer(oup),
         ])
@@ -76,7 +76,7 @@ class InvertedResidual(nn.Module):
             return self.conv(x)
 
 
-class OD_MobileNetV2(nn.Module):
+class FMD_MobileNetV2(nn.Module):
     def __init__(self,
                  num_classes=1000,
                  width_mult=1.0,
@@ -99,7 +99,7 @@ class OD_MobileNetV2(nn.Module):
             block: Module specifying inverted residual building block for mobilenet
             norm_layer: Module specifying the normalization layer to use
         """
-        super(OD_MobileNetV2, self).__init__()
+        super(FMD_MobileNetV2, self).__init__()
 
         input_channel = 32
         last_channel = 1280
@@ -134,7 +134,7 @@ class OD_MobileNetV2(nn.Module):
                                       reduction=reduction, kernel_num=kernel_num))
                 input_channel = output_channel
         # building last several layers
-        features.append(ODConvBNReLU(input_channel, self.last_channel, kernel_size=1, norm_layer=norm_layer,
+        features.append(FMDConvBNReLU(input_channel, self.last_channel, kernel_size=1, norm_layer=norm_layer,
                                      reduction=reduction, kernel_num=kernel_num))
         # make it nn.Sequential
         self.features = nn.Sequential(*features)
@@ -175,18 +175,18 @@ class OD_MobileNetV2(nn.Module):
         return self._forward_impl(x)
 
 
-def od_mobilenetv2(**kwargs):
-    model = OD_MobileNetV2(**kwargs)
+def fmd_mobilenetv2(**kwargs):
+    model = FMD_MobileNetV2(**kwargs)
     return model
 
 
-def od_mobilenetv2_050(**kwargs):
-    return od_mobilenetv2(width_mult=0.5, **kwargs)
+def fmd_mobilenetv2_050(**kwargs):
+    return fmd_mobilenetv2(width_mult=0.5, **kwargs)
 
 
-def od_mobilenetv2_075(**kwargs):
-    return od_mobilenetv2(width_mult=0.75, **kwargs)
+def fmd_mobilenetv2_075(**kwargs):
+    return fmd_mobilenetv2(width_mult=0.75, **kwargs)
 
 
-def od_mobilenetv2_100(**kwargs):
-    return od_mobilenetv2(width_mult=1.0, **kwargs)
+def fmd_mobilenetv2_100(**kwargs):
+    return fmd_mobilenetv2(width_mult=1.0, **kwargs)
