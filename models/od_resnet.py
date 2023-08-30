@@ -1,6 +1,6 @@
 import torch
 import torch.nn as nn
-from modules.odconv import ODConv2d
+from modules.fmdconv import ODConv2d
 
 __all__ = ['OD_ResNet', 'od_resnet18', 'od_resnet34', 'od_resnet50', 'od_resnet101']
 
