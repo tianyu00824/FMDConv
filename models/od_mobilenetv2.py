@@ -1,5 +1,5 @@
 from torch import nn
-from modules.fmdconv import ODConv2d
+from modules.fmdconv import FMDConv2d
 
 __all__ = ['OD_MobileNetV2', 'od_mobilenetv2_050', 'od_mobilenetv2_075', 'od_mobilenetv2_100']
 
