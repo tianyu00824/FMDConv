@@ -105,7 +105,7 @@ class attention2d(nn.Module):
 class FMDConv2d(nn.Module):
     def __init__(self, in_planes, out_planes, kernel_size, ratio=0.25, stride=1, padding=0, dilation=1, groups=1, bias=True,
                  reduction=0.0625, kernel_num=4, temperature=34):
-        super(ODConv2d, self).__init__()
+        super(FMDConv2d, self).__init__()
         self.in_planes = in_planes
         self.out_planes = out_planes
         self.kernel_size = kernel_size
