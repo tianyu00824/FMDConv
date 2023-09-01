@@ -1,7 +1,5 @@
 from __future__ import print_function
 
-import matplotlib.pyplot as plt
-
 import argparse
 import os
 import shutil
@@ -9,7 +7,6 @@ import time
 import random
 from math import cos, pi
 
-import numpy as np
 import torch
 import torch.nn as nn
 import torch.nn.parallel
@@ -17,15 +14,13 @@ import torch.backends.cudnn as cudnn
 import torch.optim as optim
 import torch.distributed as dist
 import torch.utils.data as data
-import torchvision
 import torchvision.transforms as transforms
 import torchvision.datasets as datasets
 import torchvision.models as models
 import models as customized_models
+from torch.nn.parallel import DistributedDataParallel as DDP
 from utils import Logger, AverageMeter, accuracy, mkdir_p, get_temperature, init_distributed_mode, get_dist_info
 from torch.cuda.amp.grad_scaler import GradScaler
-from PIL import ImageFile
-ImageFile.LOAD_TRUNCATED_IMAGES = True
 
 # Models
 default_model_names = sorted(name for name in models.__dict__
@@ -43,18 +38,18 @@ for name in customized_models.__dict__:
 model_names = default_model_names + customized_models_names
 
 # Parse arguments
-parser = argparse.ArgumentParser(description='PyTorch Cifar100 Training')
+parser = argparse.ArgumentParser(description='PyTorch ImageNet Training')
 
 # Datasets
-parser.add_argument('-d', '--dataset', default='cifar100', type=str)
+parser.add_argument('-d', '--data', default='/home/tianyu/Downloads/imagenet100', type=str)
 parser.add_argument('-j', '--workers', default=4, type=int, metavar='N',
                     help='number of data loading workers (default: 4)')
 # Optimization options
-parser.add_argument('--epochs', default=70, type=int, metavar='N',
+parser.add_argument('--epochs', default=100, type=int, metavar='N',
                     help='number of total epochs to run')
 parser.add_argument('--start-epoch', default=0, type=int, metavar='N',
                     help='manual epoch number (useful on restarts)')
-parser.add_argument('--train-batch', default=32, type=int, metavar='N',
+parser.add_argument('--train-batch', default=256, type=int, metavar='N',
                     help='batch size during training (default: 256)')
 parser.add_argument('--test-batch', default=100, type=int, metavar='N',
                     help='batch size during testing (default: 100)')
@@ -64,18 +59,18 @@ parser.add_argument('--lr', '--learning-rate', default=0.1, type=float,
                     metavar='LR', help='initial learning rate')
 parser.add_argument('--num_classes', default=1000, type=int,
                     help='number of classes')
-parser.add_argument('--lr-decay', type=str, default='schedule',
+parser.add_argument('--lr-decay', type=str, default=None,
                     help='mode for learning rate decay')
 parser.add_argument('--step', type=int, default=30,
                     help='interval for learning rate decay in step mode')
-parser.add_argument('--schedule', type=int, nargs='+', default=[20, 40, 60],
+parser.add_argument('--schedule', type=int, nargs='+', default=[150, 225],
                         help='Decrease learning rate at these epochs.')
 parser.add_argument('--gamma', type=float, default=0.1, help='LR is multiplied by gamma on schedule.')
 parser.add_argument('--momentum', default=0.9, type=float, metavar='M',
                     help='momentum')
 parser.add_argument('--weight-decay', '--wd', default=1e-4, type=float,
                     metavar='W', help='weight decay (default: 1e-4)')
-parser.add_argument('--dropout', default=0.2, type=float, help='dropout (default: 0')
+parser.add_argument('--dropout', default=0.0, type=float, help='dropout (default: 0')
 
 # Checkpoints
 parser.add_argument('-c', '--checkpoint', default='checkpoints', type=str, metavar='PATH',
@@ -83,7 +78,7 @@ parser.add_argument('-c', '--checkpoint', default='checkpoints', type=str, metav
 parser.add_argument('--resume', default='', type=str, metavar='PATH',
                     help='path to latest checkpoint (default: none)')
 # Architecture
-parser.add_argument('--arch', '-a', metavar='ARCH', default='fmd_resnet18',
+parser.add_argument('--arch', '-a', metavar='ARCH', default='resnet18',
                     choices=model_names,
                     help='model architecture: ' +
                         ' | '.join(model_names) +
@@ -101,15 +96,11 @@ parser.add_argument("--world_size", default=-1, type=int)
 parser.add_argument('--dist_url', default='env://', type=str, help='url used to set up distributed training')
 parser.add_argument('--use_amp', default=False, action='store_true', help='use automatic mixed precision')
 
-#ODConv options
+#FMDConv options
 parser.add_argument('--temp_epoch', type=int, default=10, help='number of epochs for temperature annealing')
 parser.add_argument('--temp_init', type=float, default=30.0, help='initial value of temperature')
 parser.add_argument('--reduction', type=float, default=0.0625, help='reduction ratio used in the attention module')
-parser.add_argument('--kernel_num', type=int, default=4, help='number of convolutional kernels in ODConv')
-
-parser.add_argument('--warmup', action='store_true',
-                    help='set lower initial learning rate to warm up the training')
-parser.add_argument('--mixup', type=float, default=0.0, help='mixup or not')
+parser.add_argument('--kernel_num', type=int, default=1, help='number of convolutional kernels in FMDConv')
 
 args = parser.parse_args()
 state = {k: v for k, v in args._get_kwargs()}
@@ -137,8 +128,6 @@ def main():
     init_distributed_mode(args)
     _, args.world_size = get_dist_info()
     args.gpu_ids = range(args.world_size)
-    print(1)
-    print(args.gpu_ids)
     args.train_batch = args.train_batch // args.world_size
     args.local_rank = torch.cuda.current_device()
     print("World Size", args.world_size)
@@ -154,8 +143,10 @@ def main():
                           momentum=args.momentum,
                           weight_decay=args.weight_decay)
 
-
-    model = torch.nn.DataParallel(model.cuda(args.gpu_ids[0]), device_ids=args.gpu_ids)
+    if args.distributed:
+        model = DDP(model.cuda(), device_ids=[torch.cuda.current_device()])
+    else:
+        model = torch.nn.DataParallel(model.cuda(args.gpu_ids[0]), device_ids=args.gpu_ids)
 
     print('Total params: %.2fM' % (sum(p.numel() for p in model.parameters())/1000000.0))
 
@@ -176,42 +167,45 @@ def main():
         mkdir_p(args.checkpoint)
 
     # Data loading code
+    traindir = os.path.join(args.data, 'train')
+    valdir = os.path.join(args.data, 'val')
     normalize = transforms.Normalize(mean=[0.485, 0.456, 0.406],
                                      std=[0.229, 0.224, 0.225])
 
-    trainset = torchvision.datasets.CIFAR100(root='./cifar100', train=True, download=True,
-        transform=transforms.Compose([
+    trainset = datasets.ImageFolder(
+        traindir,
+        transforms.Compose([
             transforms.RandomResizedCrop(224),
             transforms.RandomHorizontalFlip(),
             transforms.ToTensor(),
             normalize,
         ]))
-
+    train_sampler = torch.utils.data.distributed.DistributedSampler(trainset, shuffle=True)
     train_loader = torch.utils.data.DataLoader(trainset,
                                                batch_size=args.train_batch,
-                                               #sampler=train_sampler,
+                                               sampler=train_sampler,
                                                num_workers=args.workers,
                                                pin_memory=True,
                                                drop_last=False)
 
-    val_dataset = torchvision.datasets.CIFAR100(root='./cifar100', train=False, download=True,
-        transform=transforms.Compose([
+    val_dataset = datasets.ImageFolder(
+        valdir,
+        transforms.Compose([
             transforms.Resize(256),
             transforms.CenterCrop(224),
             transforms.ToTensor(),
             normalize,
         ]))
 
+    val_sampler = torch.utils.data.distributed.DistributedSampler(val_dataset, shuffle=False)
     val_loader = torch.utils.data.DataLoader(val_dataset,
                                              batch_size=args.test_batch,
                                              num_workers=args.workers,
                                              pin_memory=True,
-                                             #sampler=val_sampler,
+                                             sampler=val_sampler,
                                              drop_last=False)
 
     train_loader_len, val_loader_len = len(train_loader), len(val_loader)
-
-
 
     if args.evaluate:
         print('\nEvaluation only')
@@ -238,6 +232,7 @@ def main():
 
     # Train and val
     for epoch in range(start_epoch, args.epochs):
+        train_loader.sampler.set_epoch(epoch)
         adjust_learning_rate(optimizer, epoch, 0, train_loader_len)
         lr = optimizer.param_groups[0]['lr']
 
@@ -280,7 +275,7 @@ def train(train_loader, train_loader_len, model, criterion, optimizer, epoch, us
     temp = 1.0
 
     for batch_idx, (inputs, targets) in enumerate(train_loader):
-        # update temperature of ODConv
+        # update temperature of FMDConv
         if epoch < args.temp_epoch and hasattr(model.module, 'net_update_temperature'):
             temp = get_temperature(batch_idx + 1, epoch, train_loader_len,
                                    temp_epoch=args.temp_epoch, temp_init=args.temp_init)
@@ -393,6 +388,11 @@ def test(val_loader, val_loader_len, model, criterion, use_cuda):
         top1.update(prec1, inputs.size(0))
         top5.update(prec5, inputs.size(0))
 
+        # measure elapsed time
+        torch.cuda.synchronize()
+        batch_time.update(time.time() - end)
+        end = time.time()
+
         # plot progress
         if (batch_idx % args.print_freq == 0) or batch_idx == val_loader_len-1:
             print('({batch}/{size}) Data: {data:.3f}s | Batch: {bt:.3f}s | Loss: {loss:.4f} | top1: {top1: .4f} | '
@@ -422,7 +422,7 @@ def reduce_tensor(tensor):
     return rt
 
 
-def adjust_learning_rate2(optimizer, epoch, iteration, iter_per_epoch):
+def adjust_learning_rate(optimizer, epoch, iteration, iter_per_epoch):
     current_iter = iteration + epoch * iter_per_epoch
     max_iter = args.epochs * iter_per_epoch
 
@@ -436,41 +436,6 @@ def adjust_learning_rate2(optimizer, epoch, iteration, iter_per_epoch):
 
     for param_group in optimizer.param_groups:
         param_group['lr'] = lr
-
-
-def adjust_learning_rate(optimizer, epoch, iteration, num_iter):
-    lr = optimizer.param_groups[0]['lr']
-
-    warmup_epoch = 5 if args.warmup else 0
-    warmup_iter = warmup_epoch * num_iter
-    current_iter = iteration + epoch * num_iter
-    max_iter = args.epochs * num_iter
-
-    if args.lr_decay == 'step':
-        lr = args.lr * (args.gamma ** ((current_iter - warmup_iter) // (max_iter - warmup_iter)))
-    elif args.lr_decay == 'cos':
-        lr = args.lr * (1 + cos(pi * (current_iter - warmup_iter) / (max_iter - warmup_iter))) / 2
-    elif args.lr_decay == 'linear':
-        lr = args.lr * (1 - (current_iter - warmup_iter) / (max_iter - warmup_iter))
-    elif args.lr_decay == 'schedule':
-        count = sum([1 for s in args.schedule if s <= epoch])
-        lr = args.lr * pow(args.gamma, count)
-    else:
-        raise ValueError('Unknown lr mode {}'.format(args.lr_decay))
-
-
-    if epoch < warmup_epoch:
-        lr = args.lr * current_iter / warmup_iter
-
-
-    for param_group in optimizer.param_groups:
-        param_group['lr'] = lr
-
-
-def imshow(img):
-    img=img/2+0.5
-    plt.imshow(np.transpose(img.numpy(), (1, 2, 0)))
-    plt.show()
 
 
 if __name__ == '__main__':
