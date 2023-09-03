@@ -1023,3 +1023,6 @@ Epoch: [100 | 100] LR: 0.000100
 (1/125) Data: 1.810s | Batch: 1.978s | Loss: 0.6922 | top1:  79.7500 | top5:  95.5000
 (101/125) Data: 0.032s | Batch: 0.230s | Loss: 1.0718 | top1:  73.9604 | top5:  91.2847
 (125/125) Data: 0.026s | Batch: 0.224s | Loss: 1.1080 | top1:  73.0940 | top5:  90.8660
+
+
+python -m torch.distributed.launch --nproc_per_node=4 main.py --arch od_resnet18 --epochs 100 --lr 0.1 --wd 1e-4 --lr-decay schedule --schedule 30 60 90 --kernel_num 4 --data /root/autodl-tmp/imagenet --train-batch 400
