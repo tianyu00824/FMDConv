@@ -11,8 +11,9 @@ python -m torch.distributed.launch --nproc_per_node=1 main.py --arch od_resnet18
 
 
 my Linux:
-  K=4  76.88 94.04 127.96s
-  K=6  
-  K=8  75.97 93.49 132.56s
+  K=2  76.57 94.10 125.20s            
+  K=4  76.10 94.07 126.00s
+  K=6  76.31 93.80 139.14s
+  K=8  76.71 94.16 142.46s
   K=16 77.28 94.08 143.96s
   
