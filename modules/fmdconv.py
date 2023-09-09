@@ -62,18 +62,18 @@ class Attention(nn.Module):
 
 
 class attention2d(nn.Module):
-    def __init__(self, in_planes, ratios, K, temperature, init_weight=True):
+    def __init__(self, in_planes, ratios, kernel_num, init_weight=True):
         super(attention2d, self).__init__()
-        assert temperature%3==1
+        self.temperature = 1.0
+        #assert temperature%3==1
         self.avgpool = nn.AdaptiveAvgPool2d(1)
         if in_planes!=3:
             hidden_planes = int(in_planes*ratios)+1
         else:
-            hidden_planes = K
+            hidden_planes = kernel_num
         self.fc1 = nn.Conv2d(in_planes, hidden_planes, 1, bias=False)
         # self.bn = nn.BatchNorm2d(hidden_planes)
-        self.fc2 = nn.Conv2d(hidden_planes, K, 1, bias=True)
-        self.temperature = temperature
+        self.fc2 = nn.Conv2d(hidden_planes, kernel_num, 1, bias=True)
         if init_weight:
             self._initialize_weights()
 
@@ -88,11 +88,8 @@ class attention2d(nn.Module):
                 nn.init.constant_(m.weight, 1)
                 nn.init.constant_(m.bias, 0)
 
-    def updata_temperature(self):
-        if self.temperature!=1:
-            self.temperature -=3
-            print('Change temperature to:', str(self.temperature))
-
+    def update_temperature(self, temperature):
+        self.temperature = temperature
 
     def forward(self, x):
         x = self.avgpool(x)
@@ -104,7 +101,7 @@ class attention2d(nn.Module):
 
 class FMDConv2d(nn.Module):
     def __init__(self, in_planes, out_planes, kernel_size, ratio=0.25, stride=1, padding=0, dilation=1, groups=1, bias=True,
-                 reduction=0.0625, kernel_num=4, temperature=34):
+                 reduction=0.0625, kernel_num=4, init_weight=True):
         super(FMDConv2d, self).__init__()
         self.in_planes = in_planes
         self.out_planes = out_planes
@@ -113,18 +110,19 @@ class FMDConv2d(nn.Module):
         self.padding = padding
         self.dilation = dilation
         self.groups = groups
+        self.bias = bias
         self.kernel_num = kernel_num
         self.attention = Attention(in_planes, out_planes, kernel_size, groups=groups,
                                    reduction=reduction, kernel_num=kernel_num)
-        self.attention2 = attention2d(in_planes, ratio, kernel_num, temperature)
+        self.attention2 = attention2d(in_planes, ratio, kernel_num)
         self.weight = nn.Parameter(torch.randn(kernel_num, out_planes, in_planes//groups, kernel_size, kernel_size),
                                    requires_grad=True)
-        self.bias = bias
         if bias:
             self.bias = nn.Parameter(torch.zeros(kernel_num, out_planes))
         else:
             self.bias = None
-        self._initialize_weights()
+        if init_weight:
+            self._initialize_weights()
 
     def _initialize_weights(self):
         for i in range(self.kernel_num):
@@ -132,18 +130,15 @@ class FMDConv2d(nn.Module):
 
     def update_temperature(self, temperature):
         self.attention.update_temperature(temperature)
+        self.attention2.update_temperature(temperature)
 
-    def _forward_impl(self, x):
-        # Multiplying channel attention (or filter attention) to weights and feature maps are equivalent,
-        # while we observe that when using the latter method the models will run faster with less gpu memory cost.
+    def forward(self, x):
         channel_attention, filter_attention = self.attention(x)
         softmax_attention = self.attention2(x)
         batch_size, in_planes, height, width = x.size()
         x = x * channel_attention
-        x = x.view(1, -1, height, width)  # 变化成一个维度进行组卷积
+        x = x.reshape(1, -1, height, width)
         weight = self.weight.view(self.kernel_num, -1)
-
-        # 动态卷积的权重的生成， 生成的是batch_size个卷积参数（每个参数不同）
         aggregate_weight = torch.mm(softmax_attention, weight).view(batch_size * self.out_planes,
                                                                     self.in_planes // self.groups, self.kernel_size,
                                                                     self.kernel_size)
@@ -158,6 +153,3 @@ class FMDConv2d(nn.Module):
         output = output.view(batch_size, self.out_planes, output.size(-2), output.size(-1))
         output = output * filter_attention
         return output
-
-    def forward(self, x):
-        return self._forward_impl(x)
