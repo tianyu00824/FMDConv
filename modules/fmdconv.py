@@ -89,7 +89,9 @@ class attention2d(nn.Module):
                 nn.init.constant_(m.bias, 0)
 
     def updata_temperature(self):
-        self.attention.update_temperature(temperature)
+        if self.temperature!=1:
+            self.temperature -=3
+            print('Change temperature to:', str(self.temperature))
 
 
     def forward(self, x):
@@ -100,10 +102,10 @@ class attention2d(nn.Module):
         return F.softmax(x/self.temperature, 1)
 
 
-class FMDConv2d(nn.Module):
+class ODConv2d(nn.Module):
     def __init__(self, in_planes, out_planes, kernel_size, ratio=0.25, stride=1, padding=0, dilation=1, groups=1, bias=True,
                  reduction=0.0625, kernel_num=4, temperature=34):
-        super(FMDConv2d, self).__init__()
+        super(ODConv2d, self).__init__()
         self.in_planes = in_planes
         self.out_planes = out_planes
         self.kernel_size = kernel_size
