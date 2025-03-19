@@ -30,8 +30,6 @@ class BasicBlock(nn.Module):
 
     def forward(self, x):
         identity = x
-        #print("x: ")
-        #print(x.size())
 
         out = self.conv1(x)
         out = self.bn1(out)
@@ -43,8 +41,6 @@ class BasicBlock(nn.Module):
         if self.downsample is not None:
             identity = self.downsample(x)
 
-        #print("out: ")
-        #print(out.size())
         out += identity
         out = self.relu(out)
         return out
@@ -55,13 +51,10 @@ class Bottleneck(nn.Module):
 
     def __init__(self, inplanes, planes, stride=1, downsample=None, reduction=0.0625, kernel_num=1):
         super(Bottleneck, self).__init__()
-        #self.conv1 = conv_dy(inplanes, planes, 1, 1, 0)
         self.conv1 = fmdconv1x1(inplanes, planes, reduction=reduction, kernel_num=kernel_num)
         self.bn1 = nn.BatchNorm2d(planes)
-        #self.conv2 = conv_dy(planes, planes, 3, stride, 1)
         self.conv2 = fmdconv3x3(planes, planes, stride, reduction=reduction, kernel_num=kernel_num)
         self.bn2 = nn.BatchNorm2d(planes)
-        #self.conv3 = conv_dy(planes, planes * 4, 1, 1, 0)
         self.conv3 = fmdconv1x1(planes, planes * self.expansion, reduction=reduction, kernel_num=kernel_num)
         self.bn3 = nn.BatchNorm2d(planes * self.expansion)
         self.relu = nn.ReLU(inplace=True)
