@@ -89,9 +89,7 @@ class attention2d(nn.Module):
                 nn.init.constant_(m.bias, 0)
 
     def updata_temperature(self):
-        if self.temperature!=1:
-            self.temperature -=3
-            print('Change temperature to:', str(self.temperature))
+        self.attention.update_temperature(temperature)
 
 
     def forward(self, x):
@@ -102,10 +100,10 @@ class attention2d(nn.Module):
         return F.softmax(x/self.temperature, 1)
 
 
-class ODConv2d(nn.Module):
+class FMDConv2d(nn.Module):
     def __init__(self, in_planes, out_planes, kernel_size, ratio=0.25, stride=1, padding=0, dilation=1, groups=1, bias=True,
                  reduction=0.0625, kernel_num=4, temperature=34):
-        super(ODConv2d, self).__init__()
+        super(FMDConv2d, self).__init__()
         self.in_planes = in_planes
         self.out_planes = out_planes
         self.kernel_size = kernel_size
@@ -140,10 +138,9 @@ class ODConv2d(nn.Module):
         softmax_attention = self.attention2(x)
         batch_size, in_planes, height, width = x.size()
         x = x * channel_attention
-        x = x.view(1, -1, height, width)  # 变化成一个维度进行组卷积
+        x = x.view(1, -1, height, width)  
         weight = self.weight.view(self.kernel_num, -1)
 
-        # 动态卷积的权重的生成， 生成的是batch_size个卷积参数（每个参数不同）
         aggregate_weight = torch.mm(softmax_attention, weight).view(batch_size * self.out_planes,
                                                                     self.in_planes // self.groups, self.kernel_size,
                                                                     self.kernel_size)
